@@ -72,7 +72,6 @@ class OrderController extends Controller
         $order->load(['products:id,name,sku,price,stock_quantity']);
         return response()->json($order);
 
-
     }
 
     private function ensureOwner(Request $request, Order $order): void

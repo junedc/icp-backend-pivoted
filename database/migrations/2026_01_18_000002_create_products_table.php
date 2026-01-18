@@ -19,7 +19,7 @@ return new class extends Migration {
             $table->string('sku')->unique();
             $table->decimal('price', 12, 2);
             $table->unsignedInteger('stock_quantity')->default(0);
-
+            $table->string('image_path')->nullable();
             $table->timestamps();
         });
     }
