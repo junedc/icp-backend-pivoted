@@ -5,13 +5,17 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Models\Order;
-use App\Models\Product;
+use App\Services\OrderService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
+
+    public function __construct(private OrderService $orderService)
+    {
+    }
+
     public function index(Request $request)
     {
         return Order::query()
@@ -29,69 +33,14 @@ class OrderController extends Controller
 
     public function store(StoreOrderRequest $request)
     {
-        $user = $request->user();
-        $items = collect($request->validated('items'));
 
-        return DB::transaction(function () use ($user, $items) {
-            $productIds = $items->pluck('product_id')->unique()->values();
+        $items = ($request->validated('items'));
 
-            $gstRate = 0.10;  //TODO: add in env later on
-            $subtotal = 0;
+        $order = $this->orderService->place($request->user()->id, $items);
 
-            $products = Product::query()
-                ->whereIn('id', $productIds)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
+        return response()->json($order, 201);
 
-            foreach ($items as $item) {
-                $product = $products->get($item['product_id']);
-                $subtotal += $product->price * $item['quantity'];
 
-                if (!$product) {
-                    throw ValidationException::withMessages([
-                        'items' => ["Product {$item['product_id']} not found."],
-                    ]);
-                }
-
-                if ($product->stock_quantity < $item['quantity']) {
-                    throw ValidationException::withMessages([
-                        'items' => ["Insufficient stock for SKU {$product->sku}."],
-                    ]);
-                }
-            }
-
-            $gstAmount = round($subtotal * $gstRate, 2);
-            $total = $subtotal + $gstAmount;
-
-            $order = Order::create([
-                'user_id' => $user->id,
-                'status' => Order::STATUS_PENDING,
-                'subtotal' => $subtotal,
-                'gst_rate' => $gstRate,
-                'gst_amount' => $gstAmount,
-                'total' => $total,
-            ]);
-
-            $pivotData = [];
-            foreach ($items as $item) {
-                $product = $products->get($item['product_id']);
-
-                $pivotData[$product->id] = [
-                    'quantity' => (int) $item['quantity'],
-                    'unit_price' => $product->price,
-                ];
-
-                $product->decrement('stock_quantity', (int) $item['quantity']);
-            }
-
-            $order->products()->attach($pivotData);
-
-            return response()->json(
-                $order->load(['products:id,name,sku,price,stock_quantity']),
-                201
-            );
-        });
     }
 
     public function complete(Request $request, Order $order)
@@ -104,9 +53,9 @@ class OrderController extends Controller
             ]);
         }
 
-        $order->update(['status' => Order::STATUS_COMPLETED]);
-
-        return $order->load(['products:id,name,sku,price,stock_quantity']);
+        $order = $this->orderService->complete($order);
+        $order->load(['products:id,name,sku,price,stock_quantity']);
+        return response()->json($order);
     }
 
     public function cancel(Request $request, Order $order)
@@ -119,26 +68,11 @@ class OrderController extends Controller
             ]);
         }
 
-        return DB::transaction(function () use ($order) {
-            $order->load('products');
+        $order = $this->orderService->cancel($order);
+        $order->load(['products:id,name,sku,price,stock_quantity']);
+        return response()->json($order);
 
-            $productIds = $order->products->pluck('id')->values();
 
-            $products = Product::query()
-                ->whereIn('id', $productIds)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
-
-            foreach ($order->products as $p) {
-                $qty = (int) $p->pivot->quantity;
-                $products->get($p->id)?->increment('stock_quantity', $qty);
-            }
-
-            $order->update(['status' => Order::STATUS_CANCELLED]);
-
-            return $order->load(['products:id,name,sku,price,stock_quantity']);
-        });
     }
 
     private function ensureOwner(Request $request, Order $order): void
