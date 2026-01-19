@@ -26,6 +26,8 @@ Route::middleware('auth:sanctum')->get('/me', function (Illuminate\Http\Request 
 Route::middleware('auth:sanctum')->group(function () {
     // Categories & Products
 
+    Route::post('/logout', [AuthController::class, 'logout']);
+
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('products', ProductController::class);
 
