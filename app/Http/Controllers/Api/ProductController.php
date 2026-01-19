@@ -13,16 +13,37 @@ class ProductController extends Controller
 {
     public function __construct(
         private readonly FileStorageServiceInterface $storage
-    ) {}
+    )
+    {
+    }
 
     public function index(Request $request)
     {
-        return Product::query()
-            ->with('category:id,name')
-            ->when($request->filled('category_id'), fn($q) => $q->where('category_id', $request->integer('category_id')))
-            ->when($request->filled('search'), fn($q) => $q->where('name', 'like', '%' . $request->string('search') . '%'))
-            ->latest()
-            ->paginate(10);
+
+        $search = trim((string)$request->query('search', ''));
+        $categoryId = $request->query('category_id');
+
+        $query = Product::query()
+            ->with('category'); // so category name is available in API response
+
+        // Optional filter by category_id
+        if (!empty($categoryId)) {
+            $query->where('category_id', $categoryId);
+        }
+
+        // Search by product fields OR category name
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhereHas('category', function ($cq) use ($search) {
+                        $cq->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Paginate (so your frontend pagination works)
+        return $query->orderByDesc('id')->paginate(config('settings.records_per_page'));
     }
 
     public function store(StoreProductRequest $request)

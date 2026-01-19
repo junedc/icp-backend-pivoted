@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use Symfony\Component\HttpFoundation\Response;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Models\Order;
@@ -22,7 +23,7 @@ class OrderController extends Controller
             ->where('user_id', $request->user()->id)
             ->with(['products:id,name,sku,price,stock_quantity'])
             ->latest()
-            ->paginate(10);
+            ->paginate(config('settings.records_per_page'));
     }
 
     public function show(Request $request, Order $order)
@@ -38,7 +39,7 @@ class OrderController extends Controller
 
         $order = $this->orderService->place($request->user()->id, $items);
 
-        return response()->json($order, 201);
+        return response()->json($order, Response::HTTP_CREATED);
 
 
     }
@@ -77,7 +78,7 @@ class OrderController extends Controller
     private function ensureOwner(Request $request, Order $order): void
     {
         if ($order->user_id !== $request->user()->id) {
-            abort(403, 'You do not have access to this order.');
+            abort(Response::HTTP_UNAUTHORIZED, 'You do not have access to this order.');
         }
     }
 }

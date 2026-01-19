@@ -10,6 +10,7 @@ use App\Trait\HttpResponses;
 use Illuminate\Http\JsonResponse;
 
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
 
 
 class AuthController extends Controller
@@ -21,7 +22,7 @@ class AuthController extends Controller
         $request->validated($request->only(['email', 'password']));
 
         if(!Auth::attempt($request->only(['email', 'password']))) {
-            return $this->error('', 'Credentials do not match', 401);
+            return $this->error('', Response::HTTP_UNAUTHORIZED,'Credentials do not match');
         }
 
         $user = User::where('email', $request->email)->first();
@@ -39,7 +40,7 @@ class AuthController extends Controller
         Auth::user()->currentAccessToken()->delete();
 
         return $this->success([
-            'message' => 'You have succesfully been logged out and your token has been removed'
+            'message' => 'You have successfully been logged out and your token has been removed'
         ]);
     }
 }

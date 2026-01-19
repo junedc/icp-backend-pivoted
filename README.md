@@ -15,4 +15,10 @@ composer install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate
-php artisan storage:link
+php artisan storage:link (for image)
+```
+
+
+## Running
+```bash
+sail up 
